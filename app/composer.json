@@ -6,7 +6,11 @@
         "php": ">=8.5",
         "ext-pdo_pgsql": "*",
         "ext-apcu": "*",
-        "promphp/prometheus_client_php": "^2.15"
+        "promphp/prometheus_client_php": "^2.15",
+        "illuminate/database": "^13.43",
+        "illuminate/events": "^13.43",
+        "monolog/monolog": "^3.13",
+        "illuminate/filesystem": "^13.43"
     },
     "autoload": {
         "psr-4": {

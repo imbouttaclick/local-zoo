@@ -5,19 +5,43 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Database;
+use App\Log;
 use App\Metrics;
+use App\Models\Demo;
+use Illuminate\Database\Capsule\Manager as Capsule;
 
-// Обработка формы добавления записи. Редиректим после POST (Post/Redirect/Get),
-// чтобы повторная отправка формы не происходила при обновлении страницы
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['note'])) {
+ob_start();
+
+$rawRequestBody = file_get_contents('php://input') ?: '';
+
+register_shutdown_function(function () use ($rawRequestBody): void {
+    $responseBody = '';
+    if (ob_get_level() > 0) {
+        $responseBody = (string) ob_get_contents();
+        ob_end_flush();
+    }
+
+    Log::info('HTTP request handled', [
+        'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+        'uri' => $_SERVER['REQUEST_URI'] ?? '/',
+        'query' => $_GET,
+        'post' => $_POST,
+        'request_body' => $rawRequestBody,
+        'status_code' => http_response_code(),
+        'response_body' => $responseBody,
+    ]);
+});
+
+Database::boot();
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['note'])) {
     try {
-        $pdo = Database::connect();
-        $stmt = $pdo->prepare('INSERT INTO demo (note) VALUES (:note)');
-        $stmt->execute(['note' => (string) $_POST['note']]);
-        // Считаем только успешно сохранённые записи — после execute(), а не до
+        Demo::create([
+            'note' => (string) $_POST['note'],
+        ]);
         Metrics::noteCreated();
     } catch (\Throwable $e) {
-        // Ошибка подключения/записи — статус БД и так будет виден на странице ниже
+        Log::error('Failed to create note', ['exception' => $e->getMessage()]);
     }
     header('Location: /');
     exit;
@@ -32,11 +56,17 @@ $dbError = null;
 $rows = [];
 
 try {
-    $pdo = Database::connect();
-    $dbVersion = (string) $pdo->query('SELECT version()')->fetchColumn();
-    $rows = $pdo->query('SELECT id, created_at, note FROM demo ORDER BY id DESC')->fetchAll();
+    $versionRow = Capsule::selectOne('SELECT version() AS version');
+    $dbVersion = (string) ($versionRow->version ?? '');
+
+    $rows = Demo::query()
+        ->select(['id', 'created_at', 'note'])
+        ->orderByDesc('id')
+        ->get()
+        ->toArray();
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();
+    Log::error('Database query failed', ['exception' => $dbError]);
 }
 
 function h(string $value): string

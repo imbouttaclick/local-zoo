@@ -4,52 +4,66 @@ declare(strict_types=1);
 
 namespace App;
 
-/**
- * Минимальный структурный логгер приложения.
- *
- * Пишет одну JSON-строку на событие в stderr php-fpm, а оттуда — в `docker compose logs`
- * и (под compose.logging.yaml) в Graylog. JSON, а не свободный текст, — чтобы Graylog
- * разобрал строку на поля и можно было искать по request_id, level, route.
- *
- * В каждую запись попадает request_id из nginx (заголовок X-Request-Id ответа):
- * по нему одна и та же история запроса находится в access log nginx, в логах
- * приложения и в slow-log PostgreSQL.
- *
- * В проде для этого берут Monolog — здесь достаточно десятка строк.
- */
+use Monolog\Formatter\JsonFormatter;
+use Monolog\Handler\ErrorLogHandler;
+use Monolog\Handler\StreamHandler;
+use Monolog\Level;
+use Monolog\Logger;
+use Monolog\LogRecord;
+
 final class Log
 {
+    private static ?Logger $logger = null;
+
     public static function requestId(): string
     {
         return (string) ($_SERVER['HTTP_X_REQUEST_ID'] ?? '');
     }
 
+    public static function getLogger(): Logger
+    {
+        if (self::$logger !== null) {
+            return self::$logger;
+        }
+
+        $logger = new Logger('app');
+        $formatter = new JsonFormatter(JsonFormatter::BATCH_MODE_JSON, true);
+
+        // 1. Запись в файл app/logs/app.log (всегда доступна на хосте и в контейнере)
+        $logDir = dirname(__DIR__) . '/logs';
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0777, true);
+        }
+        $fileHandler = new StreamHandler($logDir . '/app.log', Level::Debug);
+        $fileHandler->setFormatter($formatter);
+        $logger->pushHandler($fileHandler);
+
+        // 2. Отправка в stderr через системный механизм PHP-FPM для docker compose logs
+        $dockerHandler = new ErrorLogHandler(ErrorLogHandler::OPERATING_SYSTEM, Level::Debug);
+        $dockerHandler->setFormatter($formatter);
+        $logger->pushHandler($dockerHandler);
+
+        $logger->pushProcessor(function (LogRecord $record): LogRecord {
+            $extra = $record->extra;
+            $extra['log_level'] = strtolower($record->level->name);
+            $extra['request_id'] = self::requestId();
+            $extra['route'] = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
+
+            return $record->with(extra: $extra);
+        });
+
+        self::$logger = $logger;
+
+        return $logger;
+    }
+
     public static function info(string $message, array $context = []): void
     {
-        self::write('info', $message, $context);
+        self::getLogger()->info($message, $context);
     }
 
     public static function error(string $message, array $context = []): void
     {
-        self::write('error', $message, $context);
-    }
-
-    private static function write(string $level, string $message, array $context): void
-    {
-        $record = [
-            'time' => date(DATE_ATOM),
-            // Не «level»: в GELF уже есть числовое поле level (уровень syslog), и строка
-            // «error» в том же поле сломала бы индексацию в Graylog/OpenSearch
-            'log_level' => $level,
-            'message' => $message,
-            'request_id' => self::requestId(),
-            'route' => (string) ($_SERVER['SCRIPT_NAME'] ?? ''),
-        ] + $context;
-
-        // Прямо в stderr, а не через error_log(): error_log() добавил бы свой префикс
-        // («PHP message: ...»), и строка перестала бы быть валидным JSON.
-        // Выход воркеров попадает в лог контейнера благодаря catch_workers_output
-        // в php-fpm.d/docker.conf официального образа
-        file_put_contents('php://stderr', json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
+        self::getLogger()->error($message, $context);
     }
 }
