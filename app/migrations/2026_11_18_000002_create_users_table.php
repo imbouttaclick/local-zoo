@@ -10,11 +10,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Capsule::schema()->hasTable('migration_tests')) {
-            Capsule::schema()->create('migration_tests', function (Blueprint $table) {
+        if (!Capsule::schema()->hasTable('users')) {
+            Capsule::schema()->create('users', function (Blueprint $table) {
                 $table->id();
-                $table->string('title');
-                $table->text('description')->nullable();
+                $table->string('name', 100);
+                $table->string('email', 150)->unique();
+                $table->string('password_hash');
                 $table->timestamps();
             });
         }
@@ -22,6 +23,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Capsule::schema()->dropIfExists('migration_tests');
+        Capsule::schema()->dropIfExists('users');
     }
 };
