@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
 
-use App\Config;
+use App\Crypto;
 
-$value = $argv[1] ?? '';
-if ($value === '') {
-    echo "Использование: php encrypt.php \"секретное_значение\"" . PHP_EOL;
+$plain = $argv[1] ?? '';
+if ($plain === '') {
+    echo "Использование: php encrypt.php \"значение_для_шифрования\"" . PHP_EOL;
     exit(1);
 }
 
-$encrypted = Config::encrypt($value);
-echo "Зашифрованное значение: {$encrypted}" . PHP_EOL;
-echo "Расшифровано обратно:   " . Config::decrypt($encrypted) . PHP_EOL;
+$crypto = new Crypto();
+echo $crypto->encrypt($plain) . PHP_EOL;

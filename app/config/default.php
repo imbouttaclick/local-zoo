@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 return [
     'app' => [
-        'name'   => 'Trello Board App',
-        'env'    => getenv('APP_ENV') ?: 'local',
-        'secret' => getenv('APP_ENCRYPTED_SECRET') ?: '',
+        'name' => 'Trello Clone App',
     ],
     'db' => [
         'host'     => getenv('DB_HOST') ?: 'postgres',

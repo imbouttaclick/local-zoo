@@ -42,6 +42,8 @@ services:
       DB_NAME: ${POSTGRES_DB}
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY}
     depends_on:
       postgres:
         condition: service_healthy
