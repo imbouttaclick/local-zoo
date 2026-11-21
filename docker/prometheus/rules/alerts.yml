@@ -138,3 +138,20 @@ groups:
           summary: "PostgreSQL: занято {{ $value | humanizePercentage }} соединений"
           description: "Использовано больше 80% max_connections уже 2 минуты (сейчас {{ $value | humanizePercentage }}). Новые подключения скоро начнут отклоняться."
           runbook_url: "https://github.com/romicharroyo/local_zoo_for_vyatgu/blob/main/docs/runbooks/PostgresTooManyConnections.md"
+      - alert: TrelloHighBusinessErrorRate
+        expr: sum(rate(trello_business_errors_total[2m])) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Рост бизнес-ошибок в Trello ({{ $labels.operation }}: {{ $labels.reason }})"
+          description: "Количество ошибок валидации или сбоев операций с карточками превысило 3 в минуту, хотя HTTP-статусы не 5xx."
+
+      - alert: TrelloSlowDbQueries
+        expr: histogram_quantile(0.95, sum(rate(trello_db_query_duration_seconds_bucket[5m])) by (le, operation)) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Медленные SQL-запросы Eloquent (операция: {{ $labels.operation }})"
+          description: "95-й перцентиль длительности SQL-запросов в приложении превысил 500 мс."

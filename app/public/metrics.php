@@ -17,6 +17,20 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use App\Metrics;
 use Prometheus\RenderTextFormat;
+use App\Database;
+use App\Models\BoardColumn;
+
+try {
+    Database::boot();
+    $columns = BoardColumn::withCount('cards')->get();
+    $counts = [];
+    foreach ($columns as $col) {
+        $counts[$col->title] = $col->cards_count;
+    }
+    Metrics::updateCardsByColumnGauge($counts);
+} catch (\Throwable $e) {
+    // Если БД временно недоступна, /metrics.php всё равно должен отдать остальные метрики
+}
 
 if (!Metrics::enabled()) {
     http_response_code(404);

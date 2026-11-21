@@ -433,3 +433,34 @@ compose.monitoring.yaml — стек мониторинга, подключае�
 compose.logging.yaml — Graylog и доставка логов, подключается поверх мониторинга
 docker/graylog/ — init-скрипт настройки Graylog через API
 ```
+
+## Мониторинг Trello-сервиса (выполнение задания)
+
+### 1. Какой пробел был в базовом мониторинге
+Базовый стенд отслеживает только инфраструктурные показатели (Nginx, PHP-FPM, PostgreSQL) и HTTP-ошибки уровня `5xx` (алерт `HighErrorRate`), из-за чего он не замечает:
+- **Тихие бизнес-ошибки и ошибки валидации (`4xx` / `422`):** если пользователи массово получают отказ при создании или переносе карточки, HTTP 5xx не растут, и алерт не срабатывает.
+- **Состояние бизнес-сущностей (канбан-доски):** не видно, сколько карточек создаётся и не скапливаются ли задачи в одной колонке.
+- **Время выполнения SQL-операций со стороны PHP (Eloquent):** общее время HTTP-запроса не разделяет задержки PHP и конкретных SQL-запросов (`select`, `insert`, `update`).
+
+### 2. Что было добавлено
+В `app/src/Metrics.php`, `app/public/metrics.php` и `app/public/index.php` добавлены кастомные метрики Prometheus:
+- `trello_cards_created_total` (`Counter`) — количество успешно созданных карточек.
+- `trello_cards_by_column{column}` (`Gauge`) — текущее количество карточек в каждой колонке доски.
+- `trello_business_errors_total{operation,reason}` (`Counter`) — счетчик бизнес-ошибок с детализацией по операции (`create_card`, `move_card`) и причине (`validation`, `not_found`, `db_error`).
+- `trello_db_query_duration_seconds{operation}` (`Histogram`) — гистограмма времени выполнения SQL-запросов Eloquent (`select`, `insert`, `update`).
+
+Также добавлены:
+- **4 панели в Grafana** на дашборде *Сервис / Обзор сервиса* (`docker/grafana/dashboards/service/service-overview.json`).
+- **2 правила алертов в Prometheus** (`docker/prometheus/rules/alerts.yml`): `TrelloHighBusinessErrorRate` и `TrelloSlowDbQueries`.
+
+### 3. Как проверить
+1. Запустить стенд с мониторингом:
+   ```bash
+   docker compose -f compose.yaml -f compose.monitoring.yaml up -d
+   ```
+2. Открыть `http://127.0.0`, создать несколько карточек и отправить пустую форму (вызовет ошибку валидации `422`).
+3. Проверить экспорт метрик изнутри сети Docker:
+   ```bash
+   docker compose exec nginx curl -s http://localhost:8081/metrics.php | grep trello_
+   ```
+4. Открыть Grafana (`http://127.0.0`, дашборд **Обзор сервиса**) и Prometheus (`http://127.0.0`) для просмотра графиков и статуса алертов.

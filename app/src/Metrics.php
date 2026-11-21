@@ -51,6 +51,73 @@ final class Metrics
         });
     }
 
+    public static function cardCreated(): void
+    {
+        $registry = self::registry();
+        if ($registry === null) {
+            return;
+        }
+
+        $counter = $registry->getOrRegisterCounter(
+            'trello',
+            'cards_created_total',
+            'Total number of created Trello cards'
+        );
+        $counter->inc();
+    }
+
+    public static function businessError(string $operation, string $reason): void
+    {
+        $registry = self::registry();
+        if ($registry === null) {
+            return;
+        }
+
+        $counter = $registry->getOrRegisterCounter(
+            'trello',
+            'business_errors_total',
+            'Total business and validation errors in Trello operations',
+            ['operation', 'reason']
+        );
+        $counter->inc([$operation, $reason]);
+    }
+
+    public static function observeDbQuery(string $operation, float $durationSeconds): void
+    {
+        $registry = self::registry();
+        if ($registry === null) {
+            return;
+        }
+
+        $histogram = $registry->getOrRegisterHistogram(
+            'trello',
+            'db_query_duration_seconds',
+            'Duration of Eloquent database queries in seconds',
+            ['operation'],
+            [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+        );
+        $histogram->observe($durationSeconds, [$operation]);
+    }
+
+    public static function updateCardsByColumnGauge(array $countsByColumn): void
+    {
+        $registry = self::registry();
+        if ($registry === null) {
+            return;
+        }
+
+        $gauge = $registry->getOrRegisterGauge(
+            'trello',
+            'cards_by_column',
+            'Current number of cards in each board column',
+            ['column']
+        );
+
+        foreach ($countsByColumn as $columnTitle => $count) {
+            $gauge->set((float) $count, [(string) $columnTitle]);
+        }
+    }
+
     /**
      * Метрики не должны ломать приложение: если хранилище недоступно или переполнено,
      * запрос пользователя всё равно должен отработать — теряем только точку на графике.
