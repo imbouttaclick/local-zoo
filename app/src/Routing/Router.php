@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Routing;
 
+use App\Http\Responses\AbstractResponse;
+use App\Http\Responses\JsonResponse;
+
 final class Router
 {
     /** @var array<string, array<string, array{0: class-string, 1: string}>> */
@@ -29,18 +32,20 @@ final class Router
         $handler = $this->routes[$method][$path] ?? null;
 
         if ($handler === null) {
-            http_response_code(404);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
+            (new JsonResponse([
                 'status'  => 'error',
                 'message' => "Маршрут [{$method} {$path}] не найден",
-            ], JSON_UNESCAPED_UNICODE);
+            ], 404))->send();
             return;
         }
 
         [$controllerClass, $action] = $handler;
         $controller = new $controllerClass();
-        $controller->$action();
+        $response = $controller->$action();
+
+        if ($response instanceof AbstractResponse) {
+            $response->send();
+        }
     }
 
     private function normalize(string $path): string

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
-use RuntimeException;
+use App\Http\Responses\JsonResponse;
+use App\Http\Responses\RedirectResponse;
+use App\Http\Responses\ViewResponse;
 
 abstract class AbstractController
 {
@@ -18,29 +20,26 @@ abstract class AbstractController
         return $_GET[$key] ?? $default;
     }
 
+    /** @param array<string, mixed> $data */
+    protected function view(string $viewName, array $data = [], int $statusCode = 200): ViewResponse
+    {
+        return new ViewResponse($viewName, $data, $statusCode);
+    }
+
+    /** @param array<string, mixed> $data */
     protected function render(string $viewName, array $data = [], int $statusCode = 200): void
     {
-        $viewPath = dirname(__DIR__, 2) . '/views/' . ltrim($viewName, '/') . '.php';
-        if (!is_file($viewPath)) {
-            throw new RuntimeException("Шаблон представления не найден: {$viewPath}");
-        }
-
-        http_response_code($statusCode);
-        extract($data, EXTR_SKIP);
-        require $viewPath;
+        $this->view($viewName, $data, $statusCode)->send();
     }
 
-    protected function json(array $payload, int $statusCode = 200): void
+    /** @param array<string, mixed> $payload */
+    protected function json(array $payload, int $statusCode = 200): JsonResponse
     {
-        http_response_code($statusCode);
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+        return new JsonResponse($payload, $statusCode);
     }
 
-    protected function redirect(string $url, int $statusCode = 302): never
+    protected function redirect(string $url, int $statusCode = 302): RedirectResponse
     {
-        http_response_code($statusCode);
-        header("Location: {$url}");
-        exit;
+        return new RedirectResponse($url, $statusCode);
     }
 }

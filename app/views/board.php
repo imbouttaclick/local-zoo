@@ -1,5 +1,6 @@
 <?php
 $h = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+$currentUser = \App\Auth\AuthService::user();
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -10,6 +11,7 @@ $h = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
     <style>
         body { font-family: system-ui, sans-serif; max-width: 1040px; margin: 2rem auto; padding: 0 1rem; color: #1c1c1c; background: #f4f5f7; }
         h1 { font-size: 1.5rem; margin-bottom: 0.4rem; }
+        .auth-bar { margin-bottom: 0.8rem; font-size: 0.9rem; }
         .status-bar { font-size: 0.85rem; color: #555; margin-bottom: 1rem; }
         .flash { background: #dbeafe; border: 1px solid #93c5fd; color: #1e3a8a; padding: 0.6rem 0.9rem; border-radius: 6px; margin-bottom: 1rem; }
         .ok { color: #0a7a2f; font-weight: 600; }
@@ -30,6 +32,18 @@ $h = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
 </head>
 <body>
     <h1><?= $h($board?->title ?? 'Trello Board') ?></h1>
+
+    <div class="auth-bar">
+        <?php if ($currentUser !== null): ?>
+            Вы вошли как: <b><?= $h($currentUser->name) ?></b> (<?= $h($currentUser->email) ?>)
+            <form method="post" action="/logout" style="display:inline; margin-left: 0.5rem;">
+                <button type="submit" style="padding: 0.2rem 0.6rem; cursor: pointer;">Выйти</button>
+            </form>
+        <?php else: ?>
+            Вы не авторизованы: <a href="/login">Войти</a> | <a href="/register">Регистрация</a>
+        <?php endif; ?>
+    </div>
+
     <div class="status-bar">
         PHP <?= $h(PHP_VERSION) ?> | БД:
         <span class="<?= $dbError === null ? 'ok' : 'fail' ?>">
